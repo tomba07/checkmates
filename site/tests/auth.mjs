@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import {readFileSync,readdirSync} from 'node:fs';
+import {createEmailVerificationToken} from 'better-auth/api';
+import {DatabaseSync} from 'node:sqlite';
+const base='http://127.0.0.1:5180';
+const config=Object.fromEntries(readFileSync('.env.local','utf8').trim().split('\n').map(l=>{const i=l.indexOf('=');return [l.slice(0,i),JSON.parse(l.slice(i+1))];}));
+assert.equal(config.BETTER_AUTH_URL,base);
+const testIP='198.51.100.'+(Math.floor(Math.random()*240)+1);
+const email='delivered+'+crypto.randomUUID()+'@resend.dev';
+const password='Test-only-'+crypto.randomUUID();
+let cookie='';
+async function post(path,body,authenticated=true,origin=base) {
+ const r=await fetch(base+path,{method:'POST',headers:{'content-type':'application/json',origin,'x-real-ip':testIP,...(authenticated?{cookie}:{})},body:JSON.stringify(body)});
+ const text=await r.text();let data;try{data=JSON.parse(text);}catch{data={error:text.slice(0,200)};}
+ return {status:r.status,data,headers:r.headers};
+}
+assert.equal((await fetch(base+'/api/rooms')).status,401);
+assert.equal((await fetch(base+'/api/rooms',{headers:{'oai-authenticated-user-id':'forged','oai-authenticated-user-email':email}})).status,401);
+let result=await post('/api/auth/sign-up/email',{email,password,name:'Test player',callbackURL:base+'/'});
+assert.equal(result.status,200,JSON.stringify(result.data));
+assert.equal((await post('/api/auth/sign-in/email',{email,password})).status,403,'unverified email cannot sign in');
+const token=await createEmailVerificationToken(config.BETTER_AUTH_SECRET,email);
+const verified=await fetch(base+'/api/auth/verify-email?token='+token+'&callbackURL='+encodeURIComponent(base+'/'),{redirect:'manual',headers:{'x-real-ip':testIP}});
+assert.equal(verified.status,302);
+cookie=verified.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ');
+assert.ok(cookie);
+assert.equal((await fetch(base+'/api/rooms',{headers:{cookie}})).status,200);
+assert.equal((await post('/api/rooms',{action:'create',name:'Email game',elo:500})).status,200);
+assert.equal((await post('/api/auth/sign-in/email',{email,password:'wrong-password'})).status,401);
+assert.equal((await post('/api/auth/sign-out',{},true,'https://evil.invalid')).status,403);
+assert.equal((await post('/api/auth/request-password-reset',{email,redirectTo:base+'/login'})).status,200);
+const db=new DatabaseSync('.data/checkmates.sqlite');
+const record=db.prepare('SELECT identifier FROM verification WHERE value=(SELECT id FROM user WHERE email=?) AND identifier LIKE ?').get(email,'reset-password:%');
+assert.ok(record);
+const resetToken=record.identifier.slice('reset-password:'.length);
+const newPassword='Changed-'+crypto.randomUUID();
+assert.equal((await post('/api/auth/reset-password',{token:resetToken,newPassword})).status,200);
+assert.equal((await post('/api/auth/reset-password',{token:resetToken,newPassword})).status,400,'reset token is single-use');
+assert.equal((await fetch(base+'/api/rooms',{headers:{cookie}})).status,401,'reset revokes sessions');
+result=await post('/api/auth/sign-in/email',{email,password:newPassword});
+assert.equal(result.status,200,JSON.stringify(result.data));
+cookie=result.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ');
+assert.equal((await post('/api/auth/sign-out',{})).status,200);
+assert.equal((await fetch(base+'/api/rooms',{headers:{cookie}})).status,401);
+const throttled=await Promise.all(Array.from({length:7},()=>post('/api/auth/sign-in/email',{email,password:'wrong-password'})));
+assert.ok(throttled.some(r=>r.status===429));
+db.close();
+console.log('PASS: email signup/delivery, verification, password login, game access, forged headers denied, CSRF, password reset, token replay denied, session revocation, signout, rate limiting.');

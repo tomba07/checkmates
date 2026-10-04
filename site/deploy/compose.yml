@@ -1,0 +1,37 @@
+name: checkmates
+services:
+  checkmates:
+    image: ${CHECKMATES_IMAGE:-checkmates:latest}
+    container_name: checkmates
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      DATABASE_PATH: /data/checkmates.sqlite
+    volumes:
+      - checkmates_data:/data
+    expose:
+      - "3000"
+    networks:
+      - web
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  checkmates_data:
+    name: checkmates_data
+networks:
+  web:
+    external: true
+    name: web

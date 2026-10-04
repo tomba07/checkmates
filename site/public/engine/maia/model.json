@@ -1,0 +1,21 @@
+{
+  "version": "maia3-405bf76c15727dad",
+  "bytes": 45683686,
+  "parts": [
+    {
+      "url": "/engine/maia/model-1.bin",
+      "bytes": 16777216,
+      "sha256": "30c6c65f2e4f0c9340a010363b2df10f6c8931f67a03281c30f8f81f5edaca0e"
+    },
+    {
+      "url": "/engine/maia/model-2.bin",
+      "bytes": 16777216,
+      "sha256": "7eb6139f5ebc96ffabc7c087f1b3bce3210bd2989272f804e5ba24206704496f"
+    },
+    {
+      "url": "/engine/maia/model-3.bin",
+      "bytes": 12129254,
+      "sha256": "602fe941c7b05fd14107a39cc03eb585894ea9ae0288335a63755e58bcaa5b56"
+    }
+  ]
+}

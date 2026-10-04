@@ -1,4 +1,4 @@
-# Chesscoop
+# Checkmates
 
 The application is in `site/`. See [setup and features](site/README.md).
 

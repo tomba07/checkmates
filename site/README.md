@@ -1,49 +1,32 @@
-# Chesscoop
+# Checkmates
 
-A minimal cooperative chess app. Sign in, create a group, share its invite link, and play the white pieces together against Stockfish.
+Minimal cooperative chess: create a group, invite friends, and play together against Maia 3. Pick 500–2400 Elo before each game. Each player can join one active game; leaving transfers hosting or finishes the game when the last player leaves.
 
-## Run locally
+## Development
+Requires Node.js 24+.
 
-Requires Node 22.13 or later.
+    npm ci
+    cp .env.example .env.local
+    npm run dev
 
-```sh
-npm ci
-npm run dev
-```
+Fill in the server-side auth and email settings first. Local app: http://127.0.0.1:5180.
+SQLite defaults to .data/checkmates.sqlite. Startup applies pending migrations.
 
-Open the address printed by the server. Local sign-in uses the starter's development identity; production sign-in uses ChatGPT. The local database has already been initialized in this checkout.
-
-For a fresh checkout, initialize storage before the first run:
-
-```sh
-npm run build
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_sharp_forgotten_one.sql
-npm run dev
-```
-
-## Behavior
-
-- Any group member can move the white pieces; the host starts and finishes games.
-- Stockfish 19 Lite runs in a browser worker with UCI strength limiting, from 1320 to 2400 Elo. This is the engine's target strength, not a guaranteed human rating.
-- Rooms, memberships and game PGNs are stored in D1. Clients synchronize every 1.8 seconds.
-- Server-side legal-move checks and conditional version updates prevent simultaneous moves from overwriting each other.
-- A room invite is a bearer invitation. Signed-in users who possess it can join.
-- Promotions currently default to queen.
-- Stockfish runs while at least one group member has the board open. A pending bot turn resumes when the board is reopened.
-- The hosted Site starts owner-private. Sharing access must be enabled in Sites before friends can use hosted invite links.
+## Authentication
+Email/password sign-up, email verification, and password reset use Better Auth. Password reset revokes existing sessions. Resend delivers transactional emails; all secrets are server-side and ignored by Git.
 
 ## Checks
+    npm run build
+    npm start
+    node tests/auth.mjs
+    node tests/integration.mjs
+    node tests/single-game.mjs
+    node tests/maia-engine.mjs
 
-```sh
-npx tsc --noEmit
-npm run build
-node tests/integration.mjs
-```
+Auth tests send only to Resend test recipients. Gameplay tests seed isolated local users and authenticate through real login endpoints.
 
-The integration test expects the local dev server on port 5173. It creates a test-only room in the local database and covers authentication, Elo limits, legal moves, simultaneous writes, turn enforcement, persistence, and ending a game.
+## Hosting
+See [VM deployment](deploy/README.md). The app uses Next.js standalone output, Docker, SQLite, and the existing VM's Caddy proxy. The original Sites configuration is retained as migration history; VM deployment is now the normal publishing path.
 
-Browser visual QA and WebMCP runtime validation were unavailable in the authoring environment. A read-only WebMCP tool is feature-detected when supported.
-
-## Stockfish license
-
-The unmodified Stockfish.js 19 Lite engine is distributed under GPL-3.0; see `public/engine/COPYING.txt`. Corresponding source and build instructions: https://github.com/nmrugg/stockfish.js/tree/v19.0.0 . Engine binaries originate from the locked `stockfish` npm dependency.
+## Maia
+The bundled Maia 3 ONNX model runs in the browser with ONNX Runtime Web. Model chunks are integrity-checked and cached. Rating conditions the human-move model and is not a guaranteed tournament strength. GPL license and attribution files are retained alongside the engine assets.

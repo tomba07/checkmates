@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Chesscoop · Better together",
-  description: "A shared board. A worthy opponent. Play chess together against Stockfish.",
+  title: "Checkmates · Better together",
+  description: "A shared board. A worthy opponent. Play chess together against Maia 3.",
   other: {
     "codex-preview": "development",
   },
