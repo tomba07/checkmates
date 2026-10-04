@@ -13,7 +13,7 @@ function createAuth() {
     database: getDatabase(),
     emailAndPassword: {
       enabled: true,
-      minPasswordLength: 10,
+      minPasswordLength: 1,
       maxPasswordLength: 128,
       requireEmailVerification: true,
       revokeSessionsOnPasswordReset: true,

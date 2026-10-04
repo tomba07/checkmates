@@ -7,7 +7,7 @@ const config=Object.fromEntries(readFileSync('.env.local','utf8').trim().split('
 assert.equal(config.BETTER_AUTH_URL,base);
 const testIP='198.51.100.'+(Math.floor(Math.random()*240)+1);
 const email='delivered+'+crypto.randomUUID()+'@resend.dev';
-const password='Test-only-'+crypto.randomUUID();
+const password='short'; // Regression: passwords shorter than ten characters are accepted.
 let cookie='';
 async function post(path,body,authenticated=true,origin=base) {
  const r=await fetch(base+path,{method:'POST',headers:{'content-type':'application/json',origin,'x-real-ip':testIP,...(authenticated?{cookie}:{})},body:JSON.stringify(body)});
@@ -33,7 +33,7 @@ const db=new DatabaseSync('.data/checkmates.sqlite');
 const record=db.prepare('SELECT identifier FROM verification WHERE value=(SELECT id FROM user WHERE email=?) AND identifier LIKE ?').get(email,'reset-password:%');
 assert.ok(record);
 const resetToken=record.identifier.slice('reset-password:'.length);
-const newPassword='Changed-'+crypto.randomUUID();
+const newPassword='newpw';
 assert.equal((await post('/api/auth/reset-password',{token:resetToken,newPassword})).status,200);
 assert.equal((await post('/api/auth/reset-password',{token:resetToken,newPassword})).status,400,'reset token is single-use');
 assert.equal((await fetch(base+'/api/rooms',{headers:{cookie}})).status,401,'reset revokes sessions');

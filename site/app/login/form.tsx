@@ -23,7 +23,7 @@ export default function LoginForm({returnTo,token,initialError}:{returnTo:string
  <main className="auth-panel"><h1>{mode==='login'?'Welcome back':mode==='signup'?'Create an account':mode==='forgot'?'Reset your password':'Choose a new password'}</h1>
  <form onSubmit={submit}>
  {mode!=='reset'&&<><label htmlFor="email">Email</label><input id="email" type="email" autoComplete="email" required maxLength={254} value={email} onChange={e=>setEmail(e.target.value)}/></>}
- {mode!=='forgot'&&<><label htmlFor="password">Password</label><input id="password" type="password" autoComplete={mode==='login'?'current-password':'new-password'} required minLength={mode==='login'?1:10} maxLength={128} value={password} onChange={e=>setPassword(e.target.value)}/>{mode!=='login'&&<p className="muted">At least 10 characters.</p>}</>}
+ {mode!=='forgot'&&<><label htmlFor="password">Password</label><input id="password" type="password" autoComplete={mode==='login'?'current-password':'new-password'} required maxLength={128} value={password} onChange={e=>setPassword(e.target.value)}/></>}
  {error&&<p className="dialog-error" role="alert">{error}</p>}
  {message&&<p role="status">{message}</p>}
  <button className="primary-button wide" disabled={busy}>{busy?'Please wait…':mode==='login'?'Log in':mode==='signup'?'Create account':mode==='forgot'?'Send reset link':'Save password'}</button>
