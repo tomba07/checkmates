@@ -8,22 +8,29 @@ import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/u
 type Room={id:string;name:string;elo:number;pgn:string;version:number;status:string;owner:string;members:{id:string;name:string}[]};
 const pieces:Record<string,string>={wk:'♚',wq:'♛',wr:'♜',wb:'♝',wn:'♞',wp:'♟',bk:'♚',bq:'♛',br:'♜',bb:'♝',bn:'♞',bp:'♟'};
 export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;name:string}|null;initialRoom:string;signInUrl:string}) {
- const [room,setRoom]=useState<Room|null>(null),[rooms,setRooms]=useState<Room[]>([]),[elo,setElo]=useState(500),[selected,setSelected]=useState<Square|null>(null),[dialog,setDialog]=useState<'leave'|'create'|'join'|'invite'|'reset'|'groups'|'start'|'settings'|'moves'|null>(null),[name,setName]=useState('The Sunday Club'),[code,setCode]=useState(initialRoom),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false),[botRetry,setBotRetry]=useState(0),[botError,setBotError]=useState('');
+ const [room,setRoom]=useState<Room|null>(null),[elo,setElo]=useState(500),[selected,setSelected]=useState<Square|null>(null),[dialog,setDialog]=useState<'leave'|'create'|'join'|'invite'|'reset'|'start'|'settings'|'moves'|null>(null),[name,setName]=useState('The Sunday Club'),[code,setCode]=useState(initialRoom),[busy,setBusy]=useState(false),[error,setError]=useState(''),[copied,setCopied]=useState(false),[botRetry,setBotRetry]=useState(0),[botError,setBotError]=useState('');
  const [activeRoomId,setActiveRoomId]=useState<string|null>(null);
  const maia=useMaia();
  const refreshEpoch=useRef(0);
  const current=useRef<Room|null>(null); current.current=room;
  const game=useMemo(()=>{const g=new Chess();if(room?.pgn)g.loadPgn(room.pgn);return g},[room?.pgn]);
  const history=game.history(),last=game.history({verbose:true}).at(-1),legal=selected?game.moves({square:selected,verbose:true}).map(m=>m.to):[];
- async function api(action:string,data:Record<string,unknown>={}) {const res=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...data})});const result=await res.json() as {room:Room;error?:string;activeRoomId?:string|null};if(!res.ok){if(result.activeRoomId)setActiveRoomId(result.activeRoomId);throw new Error(result.error||'Could not save. Please try again.')}return result;}
+ function checkSession(res:Response) {
+   if(res.status===401){
+     window.location.replace('/login?returnTo='+encodeURIComponent(window.location.pathname+window.location.search));
+     throw new Error('Your session expired. Please log in again.');
+   }
+ }
+ async function api(action:string,data:Record<string,unknown>={}) {const res=await fetch('/api/rooms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,...data})});checkSession(res);const result=await res.json() as {room:Room;error?:string;activeRoomId?:string|null};if(!res.ok){if(result.activeRoomId)setActiveRoomId(result.activeRoomId);throw new Error(result.error||'Could not save. Please try again.')}return result;}
  async function refresh(id?:string) {
    const epoch=refreshEpoch.current;
    const res=await fetch('/api/rooms'+(id?'?id='+encodeURIComponent(id):''));
+   checkSession(res);
    const data=await res.json() as {room:Room;rooms:Room[];error?:string;activeRoomId:string|null};
    if(!res.ok)throw new Error(data.error||'Could not load your group.');
    if(epoch!==refreshEpoch.current)return data;
    setActiveRoomId(data.activeRoomId);
-   if(id){setRoom(prev=>prev&&prev.id!==id?prev:!prev||data.room.version>=prev.version?data.room:prev);if(current.current?.id===id&&current.current?.version!==data.room.version)setElo(data.room.elo)}else setRooms(data.rooms);
+   if(id){setRoom(prev=>prev&&prev.id!==id?prev:!prev||data.room.version>=prev.version?data.room:prev);if(current.current?.id===id&&current.current?.version!==data.room.version)setElo(data.room.elo)}
    return data;
  }
  async function act(action:string,data:Record<string,unknown>={}){setBusy(true);setError('');try{const result=await api(action,{id:room?.id,version:room?.version,...data});if(action==='leave'){refreshEpoch.current++;current.current=null;setRoom(null);setBotError('');window.history.replaceState(null,'','/')}if(result.room){setRoom(result.room);setElo(result.room.elo);window.history.replaceState(null,'','/?room='+result.room.id)}setDialog(null);setSelected(null);await refresh();return result;}catch(e){setError((e as Error).message);if(room)refresh(room.id).catch(()=>{});}finally{setBusy(false)}}
@@ -65,6 +72,8 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
  async function squareClick(square:Square){if(!room||room.status!=='playing'||game.turn()!=='w'||busy||maia.status!=='ready')return;if(legal.includes(square)){await act('move',{from:selected,to:square,promotion:'q'});return}setSelected(game.get(square)?.color==='w'?square:null)}
  const ended = room?.status === 'finished' || game.isGameOver();
  const playing = room?.status === 'playing';
+ const showBoard = playing;
+ useEffect(()=>{if(!playing&&dialog==='moves')setDialog(null)},[playing,dialog]);
  const host = room?.owner === user?.id;
  const anotherGame = !!activeRoomId && activeRoomId !== room?.id;
  const status = !room ? '' : ended
@@ -73,18 +82,18 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
    : maia.status !== 'ready' ? 'Preparing Maia…'
    : game.turn() === 'b' ? 'Maia is thinking…'
    : game.isCheck() ? 'Your team is in check.' : 'Your team to move.';
- const dialogTitles = {start:'Choose bot strength',leave:'Leave this group?',create:'Create a group',join:'Join a group',invite:'Invite friends',reset:'End this game?',groups:'Your groups',settings:'Bot strength',moves:'Moves'};
- const dialogDescriptions = {start:'Pick Maia’s Elo before starting. It stays fixed for this game.',leave:'Your teammates can keep playing. If you are the last player, the game ends. You can join again with an invite.',create:'Choose a name for your group.',join:'Paste an invite link or room code.',invite:'Anyone with this link can join after signing in.',reset:'This ends the game for everyone in your group.',groups:'Choose a group or start a new one.',settings:'Choose the Elo Maia will play at in the next game.',moves:'The moves played in this game.'};
+ const dialogTitles = {start:'Choose bot strength',leave:'Leave this group?',create:'Create a group',join:'Join a group',invite:'Invite friends',reset:'End this game?',settings:'Bot strength',moves:'Moves'};
+ const dialogDescriptions = {start:'Pick Maia’s Elo before starting. It stays fixed for this game.',leave:'Your teammates can keep playing. If you are the last player, the game ends. You can join again with an invite.',create:'Choose a name for your group.',join:'Paste an invite link or room code.',invite:'Anyone with this link can join after signing in.',reset:'This ends the game for everyone in your group.',settings:'Choose the Elo Maia will play at in the next game.',moves:'The moves played in this game.'};
  return (
    <div className="app-shell">
      <header className="topbar">
        <a className="brand" href="/"><span aria-hidden="true">♞</span>checkmates</a>
        {user ? <div className="account"><span>{user.name}</span><button className="text-button" aria-label="Sign out" onClick={async()=>{const res=await fetch('/api/auth/sign-out',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(res.ok)window.location.assign('/');else setError('Could not sign out. Please try again.')}}><LogOut size={16}/></button></div> : <a className="quiet-button" href={signInUrl} target="_top">Log in</a>}
      </header>
-     <main className="play-surface">
-       <h1 className="sr-only">{room ? room.name : 'Checkmates'}</h1>
-       <div className="opponent-row">
-         <span className="opponent-name">Maia <span className="muted">3</span></span>
+     <main className={showBoard?'play-surface':'play-surface lobby-surface'}>
+       <h1 className={showBoard?'sr-only':'lobby-title'}>{room ? room.name : 'Play together'}</h1>
+       {!showBoard&&!room&&<p className="muted">Create a group or join your friends.</p>}
+       {showBoard&&<><div className="opponent-row">
          {playing ? <span className="quiet-button elo-button">{room.elo.toLocaleString()} Elo</span> : <button className="quiet-button elo-button" onClick={()=>setDialog('settings')} aria-label={`Bot strength: ${elo} Elo`}>{elo.toLocaleString()} Elo <ChevronDown size={14}/></button>}
        </div>
        <div className="board-frame"><div className="board" aria-label="Chess board">
@@ -98,20 +107,20 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
              {legal.includes(square)&&<span className={piece?'legal-capture':'legal-dot'}/>}
            </button>;
          })}
-       </div></div>
+       </div></div></>}
        <div className="table-controls">
          <div className="group-identity">
-           {playing ? <span className="group-name">{room.name}</span> : <button className="group-name" onClick={()=>setDialog('groups')}>{room?.name || 'Your group'}<ChevronDown size={14}/></button>}
+           {room&&showBoard&&<span className="group-name">{room.name}</span>}
            {room&&<div className="member-names" aria-label="Group members">{room.members.map(m=><span key={m.id}>{m.name}{m.id===user?.id?' (you)':''}</span>)}</div>}
          </div>
          <div className="table-actions">
-           {room ? <><button className="quiet-button" onClick={()=>setDialog('invite')}>Invite</button>{!playing&&<button className="primary-button" disabled={busy||maia.status!=='ready'||!host||anotherGame} onClick={()=>setDialog('start')}>{ended?'Play again':'Start game'}</button>}</> : <><button className="quiet-button" onClick={()=>setDialog('join')}>Join</button><button className="primary-button" onClick={()=>setDialog('create')}>Create group</button></>}
+           {room ? <><button className="quiet-button" onClick={()=>setDialog('invite')}>Invite</button>{!playing&&<button className="primary-button" disabled={busy||maia.status!=='ready'||!host||anotherGame} onClick={()=>setDialog('start')}>{ended?'Play again':'Start game'}</button>}</> : <><button className="quiet-button" onClick={()=>setDialog('join')}>Join group</button><button className="primary-button" onClick={()=>setDialog('create')}>Create group</button></>}
          </div>
        </div>
-       <div className="board-status">
+       {room&&<div className="board-status">
          <span role="status" aria-live="polite">{maia.status==='error'?<>{maia.message} <button className="text-button" onClick={maia.retry}>Retry</button></>:maia.status!=='ready'?(maia.status==='downloading'?`Loading Maia · ${maia.progress}%`:'Loading Maia…'):status}</span>
-         <div className="secondary-actions">{room&&<button className="text-button" onClick={()=>setDialog('leave')}>Leave</button>}{history.length>0&&<button className="text-button" onClick={()=>setDialog('moves')}>Moves</button>}{playing&&host&&<button className="text-button" onClick={()=>setDialog('reset')}>End game</button>}</div>
-       </div>
+         <div className="secondary-actions">{room&&<button className="text-button" onClick={()=>setDialog('leave')}>Leave</button>}{playing&&history.length>0&&<button className="text-button" onClick={()=>setDialog('moves')}>Moves</button>}{playing&&host&&<button className="text-button" onClick={()=>setDialog('reset')}>End game</button>}</div>
+       </div>}
        {botError&&playing&&game.turn()==='b'&&<div className="error-banner" role="alert">{botError}<button className="text-button" onClick={()=>{setBotError('');if(maia.status==='error')maia.retry();else setBotRetry(n=>n+1)}}>Retry move</button></div>}
        {anotherGame&&<p className="current-game-notice"><a href={'/?room='+activeRoomId}>Return to your current game</a></p>}{error&&<div className="error-banner" role="alert">{error}<button aria-label="Dismiss error" onClick={()=>setError('')}><X size={16}/></button></div>}
      </main>
@@ -124,13 +133,10 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
            <Slider aria-label="Bot Elo" min={500} max={2400} step={10} value={[elo]} onValueChange={v=>setElo(v[0])} disabled={!!room&&(playing||!host)} className="elo-slider"/>
            <div className="range-labels"><span>500</span><span>2,400</span></div>
            {room&&(playing||!host)&&<p className="muted">{playing?'You can change the strength after this game.':'The group host chooses the strength.'}</p>}
-           {dialog==='start' ? <button className="primary-button" disabled={busy||playing||!host||anotherGame||maia.status!=='ready'} onClick={()=>act('start',{elo})}>Start game · {elo.toLocaleString()} Elo</button> : <button className="primary-button" onClick={()=>setDialog(null)}>Done</button>}
+           {dialog==='start' ? <button className="primary-button" disabled={busy||playing||!host||anotherGame||maia.status!=='ready'} onClick={()=>act('start',{elo})}>Start game</button> : <button className="primary-button" onClick={()=>setDialog(null)}>Done</button>}
          </> : dialog==='moves' ? <div className="move-list">{Array.from({length:Math.ceil(history.length/2)},(_,i)=><div className="move-pair" key={i}><span>{i+1}.</span><strong>{history[i*2]}</strong><strong>{history[i*2+1]||'…'}</strong></div>)}</div>
          : !user ? <a className="primary-button" href={signInUrl} target="_top">Log in</a>
-         : dialog==='groups' ? <>
-           {activeRoomId&&<p className="muted">Leave or finish your current game before joining or starting another.</p>}{rooms.length>0&&<div className="room-list">{rooms.filter(r=>!activeRoomId||r.id===activeRoomId).map(r=><a key={r.id} href={'/?room='+r.id}>{r.name}{room?.id===r.id&&<Check size={16}/>}</a>)}</div>}
-           {!activeRoomId&&<div className="dialog-actions"><button className="quiet-button" onClick={()=>setDialog('join')}>Join a group</button><button className="primary-button" onClick={()=>setDialog('create')}>Create group</button></div>}
-         </> : dialog==='create' ? <form onSubmit={e=>{e.preventDefault();act('create',{name,elo})}}>
+         : dialog==='create' ? <form onSubmit={e=>{e.preventDefault();act('create',{name,elo})}}>
            <label htmlFor="group-name">Group name</label><input id="group-name" maxLength={48} required value={name} onChange={e=>setName(e.target.value)}/>
            <button className="primary-button wide" disabled={busy}>Create group</button>
          </form> : dialog==='join' ? <form onSubmit={e=>{e.preventDefault();let id=code.trim();try{id=new URL(id).searchParams.get('room')||id}catch{}act('join',{id})}}>

@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import {getDatabase} from '@/db/sqlite';
+import {getAuthBaseURL} from './auth-origins';
 const env=process.env;
 
 let instance: ReturnType<typeof createAuth> | undefined;
@@ -8,7 +9,7 @@ function createAuth() {
   if (!env.BETTER_AUTH_SECRET || !env.BETTER_AUTH_URL) throw new Error('Authentication is not configured.');
   return betterAuth({
     appName: 'Checkmates',
-    baseURL: env.BETTER_AUTH_URL,
+    baseURL: getAuthBaseURL(),
     secret: env.BETTER_AUTH_SECRET,
     database: getDatabase(),
     emailAndPassword: {

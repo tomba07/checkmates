@@ -1,4 +1,5 @@
 import { getCurrentUser } from '@/lib/current-user';
+import {getAuthOrigins} from '@/lib/auth-origins';
 import {roomDatabase} from '@/db/sqlite';
 import { Chess } from 'chess.js';
 import { activeRoomSql, createRoomSql, joinRoomSql, startRoomSql } from '@/db/room-queries';
@@ -46,7 +47,7 @@ export async function POST(req:Request) {
   try {
     const user = await getCurrentUser();
     if (!user) return reply({error:'Please sign in first.'},401);
-    if (req.headers.get('origin') && req.headers.get('origin')!==new URL(process.env.BETTER_AUTH_URL!).origin) return reply({error:'Invalid request origin.'},403);
+    if (req.headers.get('origin') && !getAuthOrigins().includes(req.headers.get('origin')!)) return reply({error:'Invalid request origin.'},403);
     let body:Record<string,unknown>;
     try {
       const parsed = await req.json();

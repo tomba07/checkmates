@@ -29,6 +29,10 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .account { display: flex; align-items: center; gap: 16px; font-size: 14px; color: #737c72; }
 .account a { padding: 8px; }
 .play-surface { width: min(600px, calc(100% - 40px), calc(100svh - 225px)); min-width: min(320px, calc(100% - 40px)); margin: 30px auto 32px; }
+.play-surface.lobby-surface { width: min(460px, calc(100% - 40px)); margin-top: 80px; }
+.lobby-title { font-size: 26px; letter-spacing: -.6px; margin: 0 0 12px; }
+.lobby-surface .table-controls { flex-wrap: wrap; }
+.lobby-surface .group-identity:empty { display: none; }
 .opponent-row { display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin-bottom: 8px; }
 .opponent-name { font-size: 16px; font-weight: 550; }
 .muted { color: #798276; }
