@@ -3,6 +3,7 @@ import {useState,useEffect,useMemo,useRef} from 'react';
 import {Chess, type Square} from 'chess.js';
 import {ChevronDown, Check, X, LogOut, Copy} from 'lucide-react';
 import {useMaia} from '@/lib/use-maia';
+import {usePieceMotion} from '@/lib/use-piece-motion';
 import {Slider} from '@/components/ui/slider';
 import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 type Room={id:string;name:string;elo:number;pgn:string;version:number;status:string;owner:string;members:{id:string;name:string}[]};
@@ -14,6 +15,8 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
  const refreshEpoch=useRef(0);
  const current=useRef<Room|null>(null); current.current=room;
  const game=useMemo(()=>{const g=new Chess();if(room?.pgn)g.loadPgn(room.pgn);return g},[room?.pgn]);
+ const boardRef=useRef<HTMLDivElement|null>(null);
+ usePieceMotion(boardRef,game,room?.id,room?.status==='playing');
  const history=game.history(),last=game.history({verbose:true}).at(-1),legal=selected?game.moves({square:selected,verbose:true}).map(m=>m.to):[];
  function checkSession(res:Response) {
    if(res.status===401){
@@ -58,26 +61,29 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
    let active = true;
    const {id, version, elo} = room;
    setBotError('');
-   maia.getMove(game.fen(), elo).then(async move => {
-     if (!active || current.current?.id !== id || current.current.version !== version || current.current.status !== 'playing') return;
-     const result = await api('move', {id, version, from: move.slice(0,2), to: move.slice(2,4), promotion: move[4] || 'q', bot: true});
-     if (active && current.current?.id === id) setRoom(prev => !prev || result.room.version >= prev.version ? result.room : prev);
-   }).catch(async error => {
-     if (!active) return;
-     try { await refresh(id); } catch {}
-     if (active) setBotError(error.message || 'Could not play Maia’s move. Try again.');
-   });
-   return () => { active = false; };
+   const timer = window.setTimeout(() => {
+     maia.getMove(game.fen(), elo).then(async move => {
+       if (!active || current.current?.id !== id || current.current.version !== version || current.current.status !== 'playing') return;
+       const result = await api('move', {id, version, from: move.slice(0,2), to: move.slice(2,4), promotion: move[4] || 'q', bot: true});
+       if (active && current.current?.id === id) setRoom(prev => !prev || result.room.version >= prev.version ? result.room : prev);
+     }).catch(async error => {
+       if (!active) return;
+       try { await refresh(id); } catch {}
+       if (active) setBotError(error.message || 'Could not play Maia’s move. Try again.');
+     });
+   }, 800);
+   return () => { active = false; window.clearTimeout(timer); };
  }, [room?.id, room?.version, room?.status, maia.status, botRetry]);
  async function squareClick(square:Square){if(!room||room.status!=='playing'||game.turn()!=='w'||busy||maia.status!=='ready')return;if(legal.includes(square)){await act('move',{from:selected,to:square,promotion:'q'});return}setSelected(game.get(square)?.color==='w'?square:null)}
  const ended = room?.status === 'finished' || game.isGameOver();
- const playing = room?.status === 'playing';
+ const playing = room?.status === 'playing' && !game.isGameOver();
+ const checkmate = ended && game.isCheckmate();
  const showBoard = playing;
  useEffect(()=>{if(!playing&&dialog==='moves')setDialog(null)},[playing,dialog]);
  const host = room?.owner === user?.id;
  const anotherGame = !!activeRoomId && activeRoomId !== room?.id;
  const status = !room ? '' : ended
-   ? game.isCheckmate() ? game.turn() === 'b' ? 'Your team wins.' : 'Maia wins.' : 'Game finished.'
+   ? checkmate ? 'Checkmate.' : game.isStalemate() ? 'Draw by stalemate.' : game.isDraw() ? 'Game drawn.' : 'Game finished.'
    : !playing ? 'Ready when you are.'
    : maia.status !== 'ready' ? 'Preparing Maia…'
    : game.turn() === 'b' ? 'Maia is thinking…'
@@ -91,19 +97,21 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
        {user ? <div className="account"><span>{user.name}</span><button className="text-button" aria-label="Sign out" onClick={async()=>{const res=await fetch('/api/auth/sign-out',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(res.ok)window.location.assign('/');else setError('Could not sign out. Please try again.')}}><LogOut size={16}/></button></div> : <a className="quiet-button" href={signInUrl} target="_top">Log in</a>}
      </header>
      <main className={showBoard?'play-surface':'play-surface lobby-surface'}>
-       <h1 className={showBoard?'sr-only':'lobby-title'}>{room ? room.name : 'Play together'}</h1>
+       <h1 className={showBoard?'sr-only':'lobby-title'}>{checkmate ? game.turn()==='b' ? 'Your team wins' : 'Bot wins' : room ? room.name : 'Play together'}</h1>
+       {checkmate&&<p className="muted">Checkmate · {room?.name}</p>}
        {!showBoard&&!room&&<p className="muted">Create a group or join your friends.</p>}
        {showBoard&&<><div className="opponent-row">
          {playing ? <span className="quiet-button elo-button">{room.elo.toLocaleString()} Elo</span> : <button className="quiet-button elo-button" onClick={()=>setDialog('settings')} aria-label={`Bot strength: ${elo} Elo`}>{elo.toLocaleString()} Elo <ChevronDown size={14}/></button>}
        </div>
-       <div className="board-frame"><div className="board" aria-label="Chess board">
+       <div className="board-frame"><div ref={boardRef} className="board" aria-label="Chess board">
          {game.board().flat().map((piece,i)=>{
            const square=('abcdefgh'[i%8]+(8-Math.floor(i/8))) as Square;
            const dark=(Math.floor(i/8)+i%8)%2===1;
-           return <button key={square} aria-label={`${square}${piece?' '+(piece.color==='w'?'white':'black')+' '+({p:'pawn',r:'rook',n:'knight',b:'bishop',q:'queen',k:'king'}[piece.type]):''}`} aria-pressed={selected===square} className={`square ${dark?'dark':'light'} ${selected===square?'selected':''} ${last&&(last.from===square||last.to===square)?'last-move':''}`} onClick={()=>squareClick(square)}>
+           const inCheck=piece?.type==='k'&&piece.color===game.turn()&&game.isCheck();
+           return <button key={square} data-square={square} aria-label={`${square}${piece?' '+(piece.color==='w'?'white':'black')+' '+({p:'pawn',r:'rook',n:'knight',b:'bishop',q:'queen',k:'king'}[piece.type]):''}${inCheck?' in check':''}`} aria-pressed={selected===square} className={`square ${dark?'dark':'light'} ${selected===square?'selected':''} ${last&&(last.from===square||last.to===square)?'last-move':''} ${inCheck?'in-check':''}`} onClick={()=>squareClick(square)}>
              {i%8===0&&<span className="rank">{8-Math.floor(i/8)}</span>}
              {i>=56&&<span className="file">{'abcdefgh'[i%8]}</span>}
-             {piece&&<span className={'piece '+(piece.color==='w'?'white-piece':'black-piece')}>{pieces[piece.color+piece.type]}</span>}
+             {piece&&<span className="piece-motion"><span className={'piece '+(piece.color==='w'?'white-piece':'black-piece')}>{pieces[piece.color+piece.type]}</span></span>}
              {legal.includes(square)&&<span className={piece?'legal-capture':'legal-dot'}/>}
            </button>;
          })}
@@ -118,7 +126,7 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
          </div>
        </div>
        {room&&<div className="board-status">
-         <span role="status" aria-live="polite">{maia.status==='error'?<>{maia.message} <button className="text-button" onClick={maia.retry}>Retry</button></>:maia.status!=='ready'?(maia.status==='downloading'?`Loading Maia · ${maia.progress}%`:'Loading Maia…'):status}</span>
+         <span role="status" aria-live="polite">{ended?status:maia.status==='error'?<>{maia.message} <button className="text-button" onClick={maia.retry}>Retry</button></>:maia.status!=='ready'?(maia.status==='downloading'?`Loading Maia · ${maia.progress}%`:'Loading Maia…'):status}</span>
          <div className="secondary-actions">{room&&<button className="text-button" onClick={()=>setDialog('leave')}>Leave</button>}{playing&&history.length>0&&<button className="text-button" onClick={()=>setDialog('moves')}>Moves</button>}{playing&&host&&<button className="text-button" onClick={()=>setDialog('reset')}>End game</button>}</div>
        </div>}
        {botError&&playing&&game.turn()==='b'&&<div className="error-banner" role="alert">{botError}<button className="text-button" onClick={()=>{setBotError('');if(maia.status==='error')maia.retry();else setBotRetry(n=>n+1)}}>Retry move</button></div>}

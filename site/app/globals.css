@@ -49,6 +49,9 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .dark { background: #8fa77c; }
 .square.last-move { background: #bdc584; }
 .square.selected { background: #c4d38a; }
+.square.in-check::before { content: ''; position: absolute; inset: 5%; border-radius: 50%; background: radial-gradient(circle, #c94b4666 0%, #c94b4633 55%, transparent 72%); border: 2px solid #b7434380; pointer-events: none; }
+.square.piece-in-flight { z-index: 4; }
+.piece-motion { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1; }
 .piece { font-family: 'Arial Unicode MS', 'Apple Symbols', 'DejaVu Sans', serif; font-size: 10cqw; line-height: 1; z-index: 1; pointer-events: none; transform: translateY(-1px); }
 .white-piece { color: #fffef4; -webkit-text-stroke: 1px #515a46; text-shadow: 0 2px 1px #35452830; }
 .black-piece { color: #33422e; -webkit-text-stroke: .5px #202d1c; }
