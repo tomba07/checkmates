@@ -47,8 +47,12 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
 .square { position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 0; border-radius: 0; padding: 0; }
 .light { background: #e9edde; }
 .dark { background: #8fa77c; }
-.square.last-move { background: #bdc584; }
-.square.selected { background: #c4d38a; }
+.square.last-move-from { background: #d5d19b; }
+.square.last-move-from.dark { background: #b5b77c; }
+.square.last-move-from::after { content: ''; position: absolute; inset: 35%; border: 2px solid #71652380; border-radius: 50%; pointer-events: none; }
+.square.last-move-to { background: #e4cf82; box-shadow: inset 0 0 0 3px #9c7d30; }
+.square.last-move-to.dark { background: #c8b76b; }
+.square.selected, .square.selected.dark { background: #c4d38a; }
 .square.in-check::before { content: ''; position: absolute; inset: 5%; border-radius: 50%; background: radial-gradient(circle, #c94b4666 0%, #c94b4633 55%, transparent 72%); border: 2px solid #b7434380; pointer-events: none; }
 .square.piece-in-flight { z-index: 4; }
 .piece-motion { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; z-index: 1; }

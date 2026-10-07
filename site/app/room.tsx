@@ -74,7 +74,7 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
    }, 800);
    return () => { active = false; window.clearTimeout(timer); };
  }, [room?.id, room?.version, room?.status, maia.status, botRetry]);
- async function squareClick(square:Square){if(!room||room.status!=='playing'||game.turn()!=='w'||busy||maia.status!=='ready')return;if(legal.includes(square)){await act('move',{from:selected,to:square,promotion:'q'});return}setSelected(game.get(square)?.color==='w'?square:null)}
+ async function squareClick(square:Square){if(!room||room.status!=='playing'||game.turn()!=='w'||busy||maia.status!=='ready')return;if(selected===square){setSelected(null);return}if(legal.includes(square)){await act('move',{from:selected,to:square,promotion:'q'});return}setSelected(game.get(square)?.color==='w'?square:null)}
  const ended = room?.status === 'finished' || game.isGameOver();
  const playing = room?.status === 'playing' && !game.isGameOver();
  const checkmate = ended && game.isCheckmate();
@@ -108,7 +108,7 @@ export default function ChessRoom({user,initialRoom,signInUrl}:{user:{id:string;
            const square=('abcdefgh'[i%8]+(8-Math.floor(i/8))) as Square;
            const dark=(Math.floor(i/8)+i%8)%2===1;
            const inCheck=piece?.type==='k'&&piece.color===game.turn()&&game.isCheck();
-           return <button key={square} data-square={square} aria-label={`${square}${piece?' '+(piece.color==='w'?'white':'black')+' '+({p:'pawn',r:'rook',n:'knight',b:'bishop',q:'queen',k:'king'}[piece.type]):''}${inCheck?' in check':''}`} aria-pressed={selected===square} className={`square ${dark?'dark':'light'} ${selected===square?'selected':''} ${last&&(last.from===square||last.to===square)?'last-move':''} ${inCheck?'in-check':''}`} onClick={()=>squareClick(square)}>
+           return <button key={square} data-square={square} aria-label={`${square}${piece?' '+(piece.color==='w'?'white':'black')+' '+({p:'pawn',r:'rook',n:'knight',b:'bishop',q:'queen',k:'king'}[piece.type]):''}${inCheck?' in check':''}${last?.from===square?', last move started here':last?.to===square?', last move ended here':''}`} aria-pressed={selected===square} className={`square ${dark?'dark':'light'} ${selected===square?'selected':''} ${last?.from===square?'last-move-from':''} ${last?.to===square?'last-move-to':''} ${inCheck?'in-check':''}`} onClick={()=>squareClick(square)}>
              {i%8===0&&<span className="rank">{8-Math.floor(i/8)}</span>}
              {i>=56&&<span className="file">{'abcdefgh'[i%8]}</span>}
              {piece&&<span className="piece-motion"><span className={'piece '+(piece.color==='w'?'white-piece':'black-piece')}>{pieces[piece.color+piece.type]}</span></span>}
